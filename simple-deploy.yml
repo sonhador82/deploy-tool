@@ -1,0 +1,11 @@
+---
+- hosts: all
+  gather_facts: no
+  user: ubuntu
+
+  tasks:
+    - name: Test ping
+      ping:
+    - command: hostname
+      register: output
+    - debug: var=output
