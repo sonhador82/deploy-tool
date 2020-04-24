@@ -3,9 +3,37 @@
   gather_facts: no
   user: ubuntu
 
+  vars:
+    project_name: "{{ project }}"
+    dest_dir: "/home/{{ ansible_user }}/app/{{ project_name }}/"
+    dest_file: "{{ dest_dir }}/docker-compose.{{ lookup('env', 'REPO_NAME') | trim }}.yml"
+    compose_file: "{{ src_compose_file|default('docker-compose.yml') }}"
+    compose_envs: |
+      {%- set data={} -%}
+      {%- for secret in secrets -%}
+        {%- set value=lookup('env', secret) %}
+        {%- do data.update({secret: value}) -%}
+      {%- endfor -%}
+      {%- do data.update({'BUILD_NUMBER': lookup('env', 'BUILD_NUMBER')}) -%}
+      {{ data }}
+
   tasks:
-    - name: Test ping
-      ping:
-    - command: hostname
-      register: output
-    - debug: var=output
+    - shell:
+        eval $(aws ecr get-login --no-include-email)
+    - name: copy composes
+      file:
+        dest: "{{ dest_dir }}"
+        state: directory
+    - copy:
+        src: "{{ compose_file }}"
+        dest: "{{ dest_file }}"
+
+    - name: start containers
+      docker_compose:
+        build: no
+        pull: yes
+        project_src: "{{ dest_dir }}"
+        files:
+          - "{{ dest_file }}"
+        services: "{{ containers }}"
+      environment: "{{ compose_envs }}"
